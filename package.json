@@ -14,12 +14,22 @@
     "prism-media": "1.3.5",
     "quota-axi": "0.1.69"
   },
+  "overrides": {
+    "@discordjs/node-pre-gyp": {
+      "tar": "^7.5.22"
+    },
+    "@toon-format/toon": "^2.3.1"
+  },
   "allowScripts": {
     "@discordjs/opus@0.11.0": true,
     "@kmamal/sdl@0.11.13": true
   },
   "pi": {
-    "extensions": ["./index.ts"],
-    "themes": ["./themes/*.json"]
+    "extensions": [
+      "./index.ts"
+    ],
+    "themes": [
+      "./themes/*.json"
+    ]
   }
 }
