@@ -98,7 +98,8 @@ if (scenario === 'invalid') {
     const prompt = results.find(result => result?.systemPrompt)?.systemPrompt;
     assert.ok(prompt?.startsWith('BASE\n\n'));
     assert.ok(prompt.includes('TODO.md'));
-    assert.match(prompt, /bash/i);
+    const { createMarkdownQuestStore } = await load('state/quests.ts');
+    assert.equal(prompt, `BASE\n\n${createMarkdownQuestStore(todo).instructions()}`);
     assert.equal(tools.length, 0);
     // Stop quest only; no watcher was created in RPC mode.
     const stop = handlers.get('session_shutdown').find(fn => fn.toString().includes('generation'));

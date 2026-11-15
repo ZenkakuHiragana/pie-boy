@@ -119,7 +119,7 @@ export default async function quests() {
     await feature.completeQuest(recover.state,qa); assert.equal(operationCalls,0);
     await recover.emit('session_shutdown');
 
-    const nonui=await setup(store,false); assert.match((await nonui.emit('before_agent_start',{systemPrompt:'BASE'})).systemPrompt,/bash/); await nonui.emit('session_shutdown');
+    const nonui=await setup(store,false); assert.equal((await nonui.emit('before_agent_start',{systemPrompt:'BASE'})).systemPrompt,`BASE\n\n${store.instructions()}`); await nonui.emit('session_shutdown');
     let init=0,reads=0,subs=0,unsubs=0,notify, completed=0;
     const objective={key:'g',text:'goal'}, quest={key:'q',title:'memory quest',description:'description',objectives:[objective]};
     const memory={source:'memory only',initialize:async()=>{init++;},read:async()=>{reads++;return [quest];},complete:async(q,o)=>{assert.equal(q,quest);assert.equal(o,objective);completed++;},instructions:()=> 'MEMORY INSTRUCTIONS',subscribe:fn=>{subs++;notify=fn;return()=>unsubs++;}};

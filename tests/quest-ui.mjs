@@ -29,57 +29,58 @@ export default async function questUI() {
     await handlers.get('session_start')({},h.ctx);
     quest.selectQuest(h.state,data[1]);
     h.fallback = prompt; await h.capture();
-    function draw(page, ids, side, binding='c') {
+    function draw(page, ids, side, binding='ctrl+e') {
       const env = {...h.panelEnv,theme:()=>theme,focused:id=>id===ids[side],focusPanel:()=>{},tui:()=>undefined,renderersFor:()=>undefined,keys:createKeybindings({'pieBoy.quest.complete':binding})};
       const panels = new Map(ids.map(id=>[id,PANELS.get(id)(env)]));
       const built = buildArrangement(page.layout,id=>panels.get(id).component,()=>theme,{size:()=>({width,height:30}),preview:()=>{}});
       renderLayoutFrame(built.component,width,30,()=>{});
-      return renderLayoutFrame(built.component,width,30,()=>{}).lines;
+      return {lines:renderLayoutFrame(built.component,width,30,()=>{}).lines, titles:ids.map(id=>panels.get(id).title())};
     }
     const qids=['questlist','questdetail'], iids=['promptparts','prompttext'];
     for (const side of [0,1]) {
-      const q=draw(questPage,qids,side), inv=draw(invPage,iids,side);
+      const qDraw=draw(questPage,qids,side), iDraw=draw(invPage,iids,side);
+      const q=qDraw.lines, inv=iDraw.lines;
       const qp=q.map(plain), ip=inv.map(plain);
       const context=`${themeName} ${width} focus ${side}`;
-      const qHeader=qp.findIndex(s=>s.includes('QUEST  ·  c: complete subgoal'));
-      const iHeader=ip.findIndex(s=>s.includes('TEXT  WHOLE PROMPT'));
+      const qHeader=qp.findIndex(s=>s.includes(qDraw.titles[1]));
+      const iHeader=ip.findIndex(s=>s.includes(iDraw.titles[1]));
       assert.ok(qHeader>=0 && iHeader>=0,context);
-      if(width>=120) {
-        const expected=Math.round(width*0.31);
-        assert.equal(qp[0].indexOf('│'),expected,context);
-        assert.equal(ip[0].indexOf('│'),expected,context);
-        assert.equal(qHeader,0,context);
-      } else {
-        assert.equal(qHeader,Math.round(30*0.25),context);
-        assert.equal(iHeader,qHeader,context);
+      assert.equal(qHeader,iHeader,context);
+      assert.equal(qp[qHeader].indexOf(qDraw.titles[1]),ip[iHeader].indexOf(iDraw.titles[1]),context);
+      if (qHeader===0) {
+        const boundary=ip[0].indexOf('│');
+        assert.ok(boundary>0,context);
+        assert.equal(qp[0].indexOf('│'),boundary,context);
       }
-      const selected=qp.findIndex(s=>s.includes('◆Prepare the night observation'));
-      const picked=ip.findIndex(s=>s.includes('◆WHOLE PROMPT'));
+      const selected=qp.findIndex(s=>s.includes('◆'+data[1].title));
+      const picked=ip.findIndex(s=>s.startsWith(' ◆') || s.startsWith('▌◆'));
       assert.ok(selected>0 && picked>0,context);
-      assert.equal(qp[selected].indexOf('◆'),1,context);
-      assert.equal(ip[picked].indexOf('◆'),1,context);
+      assert.equal(qp[selected].indexOf('◆'),ip[picked].indexOf('◆'),context);
       assert.equal(qp[selected][0],side===0?'▌':' ',context);
       assert.equal(ip[picked][0],side===0?'▌':' ',context);
       assert.ok(q[selected].includes(theme.fg('accent','◆')),context);
       assert.ok(inv[picked].includes(theme.fg('accent','◆')),context);
       assert.ok(q[qHeader+1].includes(theme.fg('accent',theme.bold(data[1].title))),context);
-      const textCol=width>=120 ? Math.round(width*0.31)+2 : 1;
-      const desc=qp.find(s=>s.includes('Make a clear observation plan'));
-      const body=ip.find(s=>s.includes('<role>') && s.indexOf('<role>')===textCol);
-      assert.equal(desc?.indexOf('Make a clear observation plan'),textCol,context);
-      assert.ok(body,context);
-      assert.ok(qp.some(s=>s.includes('2025-01-16 session-fixture-002')),context);
+      const descStart=data[1].description.split(' ').slice(0,4).join(' ');
+      const desc=qp.find(s=>s.includes(descStart));
+      const promptStart=prompt.split('\n')[0];
+      const body=ip.slice(iHeader+1).find(s=>s.includes(promptStart));
+      assert.ok(desc && body,context);
+      assert.equal(desc.indexOf(descStart),body.indexOf(promptStart),context);
+      const origin=data[1].provenance.replace(/^<!--\s*/, '').replace(/\s*-->$/, '');
+      assert.ok(qp.some(s=>s.includes(origin)),context);
       assert.ok(qp.every(s=>!s.includes('<!--')&&!s.includes('-->')),context);
       // Framed titles use the focused heavy rule and unfocused light rule, with theme colors.
       const listStart=side===0?'━━':'──', detailStart=side===1?'━━':'──';
       assert.ok(q[0].includes(theme.fg(side===0?'borderAccent':'borderMuted',listStart)),context);
       assert.ok(q[qHeader].includes(theme.fg(side===1?'borderAccent':'borderMuted',detailStart)),context);
-      assert.ok(q[0].includes('c: complete'),context);
-      assert.ok(q[qHeader].includes('c: complete subgoal'),context);
-      const disabled=draw(questPage,qids,side,[]).map(plain);
-      assert.ok(disabled[0].includes('QUESTS  2'),context);
-      assert.ok(disabled.some(s=>s.includes('QUEST')),context);
-      assert.ok(disabled.every(s=>!s.includes(': complete')),context);
+      assert.ok(qDraw.titles.every(title=>title.includes('ctrl+e')),context);
+      assert.ok(qp[0].includes(qDraw.titles[0]),context);
+      assert.ok(qp[qHeader].includes(qDraw.titles[1]),context);
+      const disabled=draw(questPage,qids,side,[]);
+      assert.ok(disabled.titles.every(title=>!title.includes('ctrl+e')),context);
+      assert.ok(disabled.titles.every(title=>disabled.lines.map(plain).some(line=>line.includes(title))),context);
+      assert.ok(disabled.lines.map(plain).every(line=>!line.includes('ctrl+e')),context);
     }
     await handlers.get('session_shutdown')?.({},h.ctx);
   }

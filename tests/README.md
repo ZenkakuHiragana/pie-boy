@@ -174,11 +174,11 @@ initialization-failure, concurrent in-process editing,
 symlink preservation, ambiguity and snapshot identity regression checks.
 `panel-keys.mjs` checks remapped/disabled RADIO, model and TREE keys and displayed
 hints. Set `PI_SCRATCHPAD` to an existing writable directory as above; new test
-fixtures stay there. Prompt tests check text and injection conditions, not whether
+fixtures stay there. Prompt tests check injection behavior, not whether
 an actual model records or deletes tasks as instructed.
 
 `quest-ui.mjs` compares actual QUEST and INV layouts, margins, themed selection
 markers and headers at wide and narrow widths.
 
-`quest-instructions.mjs` checks data-only initialization, the single instruction
-source and injection, and parser compatibility without running a model.
+`quest-context.mjs` checks delivery of opaque provider instructions, preservation
+of the incoming system prompt, and lifecycle boundaries. It does not evaluate prose.
