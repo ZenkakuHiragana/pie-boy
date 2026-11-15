@@ -176,3 +176,9 @@ symlink preservation, ambiguity and snapshot identity regression checks.
 hints. Set `PI_SCRATCHPAD` to an existing writable directory as above; new test
 fixtures stay there. Prompt tests check text and injection conditions, not whether
 an actual model records or deletes tasks as instructed.
+
+`quest-ui.mjs` compares actual QUEST and INV layouts, margins, themed selection
+markers and headers at wide and narrow widths.
+
+`quest-instructions.mjs` checks data-only initialization, the single instruction
+source and injection, and parser compatibility without running a model.

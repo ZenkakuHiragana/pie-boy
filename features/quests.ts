@@ -72,7 +72,7 @@ export function setupQuests(pi: ExtensionAPI, env: FeatureEnv, store: QuestStore
   pi.on("before_agent_start", async event => {
     // Non-interactive sessions have no file watcher to recover a failed read.
     if (i.active && i.initialized && !i.readable) await refresh(i);
-    return i.active && i.initialized && i.readable ? { systemPrompt: `${event.systemPrompt}\n\n${store.instructions()}` } : undefined;
+    return i.active ? { systemPrompt: `${event.systemPrompt}\n\n${store.instructions()}` } : undefined;
   });
   pi.on("session_shutdown", () => { i.active = false; i.initialized = false; i.readable = false; i.context = undefined; ++i.generation; i.unsubscribe?.(); i.unsubscribe = undefined; });
 }

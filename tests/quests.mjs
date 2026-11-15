@@ -29,7 +29,7 @@ export default async function quests() {
   try {
     assert.equal(questFile(dir),join(dir,'pie-boy','TODO.md'));
     const file=questFile(dir), store=createMarkdownQuestStore(file);
-    await store.initialize(); const template=await readFile(file,'utf8'); assert.match(template,/## Title/); assert.deepEqual(await store.read(),[]);
+    await store.initialize(); const template=await readFile(file,'utf8'); assert.equal(template,'# TODO\n'); assert.deepEqual(await store.read(),[]);
     const initial='Intro\r\n\r\n## Alpha\r\n<!-- date id -->\r\nDescription\r\n```md\r\n## not a quest\r\n- not a goal\r\n```\r\n- first\r\n- second\r\n\r\n## Beta\r\nother\r\n';
     await writeFile(file,initial); await store.initialize(); assert.equal(await readFile(file,'utf8'),initial);
     let [a,b]=await store.read(); assert.equal(a.title,'Alpha'); assert.equal(a.objectives.length,2); assert.match(a.description,/## not a quest/); assert.match(a.provenance,/date id/); assert.equal(b.title,'Beta');
@@ -43,7 +43,7 @@ export default async function quests() {
     await writeFile(file,'## q\n- one\n- two\n');
     const h=await setup(store), data=()=>feature.questData(h.state);
     assert.equal(data().quests[0].title,'q');
-    const prompt=await h.emit('before_agent_start',{systemPrompt:'BASE'}); assert.match(prompt.systemPrompt,/BASE/); assert.match(prompt.systemPrompt,/bash/); assert.doesNotMatch(prompt.systemPrompt,/- one/); assert.match(prompt.systemPrompt,/column-zero ## Title/); assert.match(prompt.systemPrompt,/bash is unavailable/); assert.match(prompt.systemPrompt,/only when the user explicitly/);
+    const prompt=await h.emit('before_agent_start',{systemPrompt:'BASE'}); assert.equal(prompt.systemPrompt,`BASE\n\n${store.instructions()}`); assert.doesNotMatch(prompt.systemPrompt,/- one/);
     let panelEnv={...h.panelEnv, focusPanel:()=>{}, tui:()=>undefined,renderersFor:()=>undefined,keys:createKeybindings({'pieBoy.quest.complete':'c'})};
     const left=PANELS.get('questlist')(panelEnv), right=PANELS.get('questdetail')(panelEnv);
     const frame=p=>renderLayoutFrame(p.component,60,16,()=>{}).lines.map(plain).join('\n');
@@ -91,8 +91,8 @@ export default async function quests() {
     await feature.completeQuest(recovering.state,qa); assert.match(feature.questData(recovering.state).error,/ambiguous/);
     feature.selectQuest(recovering.state,qb); await feature.completeQuest(recovering.state,qb); assert.equal(normalComplete,1);
     await recovering.emit('session_shutdown');
-    const unreadable=await setup({source:'unreadable',initialize:async()=>{},read:async()=>{throw Error('unreadable');},subscribe:()=>()=>{},instructions:()=> 'DO NOT INJECT',complete:async()=>{assert.fail('must not write');}});
-    assert.equal(await unreadable.emit('before_agent_start',{systemPrompt:'BASE'}),undefined);
+    const unreadable=await setup({source:'unreadable',initialize:async()=>{},read:async()=>{throw Error('unreadable');},subscribe:()=>()=>{},instructions:()=> 'GUIDE',complete:async()=>{assert.fail('must not write');}});
+    assert.equal((await unreadable.emit('before_agent_start',{systemPrompt:'BASE'})).systemPrompt,'BASE\n\nGUIDE');
     await unreadable.emit('session_shutdown');
 
     // Same-name quests keep the completed target and the next objective in view.
@@ -113,8 +113,8 @@ export default async function quests() {
     let canRead=false, operationCalls=0;
     const recoverStore={source:'recover',initialize:async()=>{},read:async()=>{if(!canRead)throw Error('temporary');return [qa];},subscribe:()=>()=>{},instructions:()=> 'RECOVERED',complete:async()=>{operationCalls++;}};
     const recover=await setup(recoverStore,false);
-    assert.equal(await recover.emit('before_agent_start',{systemPrompt:'B'}),undefined);
-    canRead=true; assert.match((await recover.emit('before_agent_start',{systemPrompt:'B'})).systemPrompt,/RECOVERED/);
+    assert.equal((await recover.emit('before_agent_start',{systemPrompt:'B'})).systemPrompt,'B\n\nRECOVERED'); assert.match(feature.questData(recover.state).error,/temporary/);
+    canRead=true; assert.match((await recover.emit('before_agent_start',{systemPrompt:'B'})).systemPrompt,/RECOVERED/); assert.equal(feature.questData(recover.state).error,undefined);
     canRead=false; recover.ctx.hasUI=true; recover.shown(); await until(()=>feature.questData(recover.state).quests.length===0,'failed refresh');
     await feature.completeQuest(recover.state,qa); assert.equal(operationCalls,0);
     await recover.emit('session_shutdown');
@@ -126,7 +126,7 @@ export default async function quests() {
     const m=await setup(memory); assert.equal(init,1); assert.equal(subs,1); assert.equal((await m.emit('before_agent_start',{systemPrompt:'B'})).systemPrompt,'B\n\nMEMORY INSTRUCTIONS');
     const mp=PANELS.get('questdetail')({...m.panelEnv,focusPanel:()=>{},tui:()=>undefined,renderersFor:()=>undefined}); assert.match(frame(mp),/memory only/); assert.match(frame(mp),/goal/);
     m.setAnswer(true); mp.list.key('x'); await until(()=>!feature.questData(m.state).busy,'memory completion'); assert.equal(completed,1); const before=reads; notify(); await until(()=>reads>before,'memory notification'); await m.emit('session_shutdown'); assert.equal(unsubs,1);
-    const bad=await setup({...memory,initialize:async()=>{throw Error('init broken')}}); assert.match(feature.questData(bad.state).error,/init broken/); assert.equal(await bad.emit('before_agent_start',{systemPrompt:'B'}),undefined); await bad.emit('session_shutdown');
+    const bad=await setup({...memory,initialize:async()=>{throw Error('init broken')}}); assert.match(feature.questData(bad.state).error,/init broken/); assert.equal((await bad.emit('before_agent_start',{systemPrompt:'B'})).systemPrompt,'B\n\nMEMORY INSTRUCTIONS'); await bad.emit('session_shutdown');
     let resolveRead; const hh=await harness(), handlers=new Map(); hh.ctx.mode="tui";
     const en={state:hh.state,context:()=>hh.ctx,changed:d=>d.version++,requestRender:()=>{},shows:()=>true,onShownChange:()=>{}};
     feature.setupQuests({on:(name,fn)=>handlers.set(name,fn)},en,{...memory,read:()=>new Promise(r=>resolveRead=r)});

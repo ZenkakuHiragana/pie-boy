@@ -205,8 +205,8 @@ export function createTabs(config: PieBoyConfig = DEFAULT_CONFIG): TabDef[] {
       label: "QUEST",
       layout: {
         minWidth: 120,
-        wide: { row: [{ panel: "questlist", size: "50%" }, "questdetail"] },
-        narrow: { column: [{ panel: "questlist", size: "30%" }, "questdetail"] },
+        wide: { row: [{ panel: "questlist", size: "31%" }, "questdetail"] },
+        narrow: { column: [{ panel: "questlist", size: "25%" }, "questdetail"] },
       },
       primary: "questdetail",
     }, ...tab.pages] };

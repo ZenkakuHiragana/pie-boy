@@ -199,8 +199,7 @@ export default async function questStoreTests() {
       assert.equal((await lstat(alias)).isSymbolicLink(), true);
       assert.deepEqual(await temps(dir), []);
     } else console.log('quest-store: symlink tests skipped (OS permissions)');
-    const prompt = store.instructions();
-    for (const pattern of [/## Title/, /- subgoal/, /preamble/, /bash/, /permission/i, /cannot be read/, /do not write/, /report/]) assert.match(prompt, pattern);
+
   } finally { fs.promises.open = realOpen; fs.promises.rename = realRename; syncBuiltinESMExports(); await rm(dir, { recursive: true, force: true }); }
 }
 

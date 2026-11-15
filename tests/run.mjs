@@ -19,6 +19,8 @@ console.log('panel layout assertions passed');
 await (await import('./config.mjs')).default();
 await (await import('./status-art.mjs')).default();
 await (await import('./quests.mjs')).default();
+await (await import('./quest-ui.mjs')).default();
+await (await import('./quest-instructions.mjs')).default();
 await (await import('./quest-store.mjs')).default();
 await (await import('./panel-keys.mjs')).default();
 await (await import('./config-startup.mjs')).default();

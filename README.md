@@ -108,8 +108,7 @@ Invalid settings prevent Pie-Boy from loading.
 ### QUEST
 
 QUEST uses `pie-boy/TODO.md` in Pi's agent directory. Enabling it creates the file
-if needed and gives the agent instructions to maintain it through bash. New
-files include editing rules.
+if needed and gives the agent instructions to maintain it through bash.
 
 ### Keybindings
 
