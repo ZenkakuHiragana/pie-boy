@@ -29,7 +29,7 @@ export default async function quests() {
   try {
     assert.equal(questFile(dir),join(dir,'pie-boy','TODO.md'));
     const file=questFile(dir), store=createMarkdownQuestStore(file);
-    await store.initialize(); const template=await readFile(file,'utf8'); assert.equal(template,'# TODO\n'); assert.deepEqual(await store.read(),[]);
+    await store.initialize(); const template=await readFile(file,'utf8'); assert.match(template,/^# TODO\n/); assert.deepEqual(await store.read(),[]);
     const initial='Intro\r\n\r\n## Alpha\r\n<!-- date id -->\r\nDescription\r\n```md\r\n## not a quest\r\n- not a goal\r\n```\r\n- first\r\n- second\r\n\r\n## Beta\r\nother\r\n';
     await writeFile(file,initial); await store.initialize(); assert.equal(await readFile(file,'utf8'),initial);
     let [a,b]=await store.read(); assert.equal(a.title,'Alpha'); assert.equal(a.objectives.length,2); assert.match(a.description,/## not a quest/); assert.match(a.provenance,/date id/); assert.equal(b.title,'Beta');
