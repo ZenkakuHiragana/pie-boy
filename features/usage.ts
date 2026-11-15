@@ -95,7 +95,7 @@ export function setupUsage(pi: ExtensionAPI, env: FeatureEnv): void {
     }
     // A reading for a provider the session has since left is dropped.
     const left = () => abort.signal.aborted || env.context()?.model?.provider !== piProvider;
-    let auth: { apiKey?: string; headers?: Record<string, string> } | undefined;
+    let auth: { apiKey?: string; headers?: Record<string, string | null> } | undefined;
     try {
       auth = (await ctx.modelRegistry.getProviderAuth(piProvider))?.auth;
     } catch (error) {

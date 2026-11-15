@@ -13,4 +13,5 @@ await (await import('./skills.mjs')).default();
 await (await import('./skill-preview.mjs')).default();
 await (await import('./foreground.mjs')).default();
 await (await import('./radio-stations.mjs')).default();
+await (await import('./logo-assets.mjs')).default();
 console.log('panel layout assertions passed');

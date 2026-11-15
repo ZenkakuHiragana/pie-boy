@@ -1,14 +1,18 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import { readdirSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { allocateImageId, getCapabilities, getCellDimensions, renderImage } from "@earendil-works/pi-tui";
 import { type PieBoyState, sanitize, type Versioned } from "../state/core.ts";
 import type { FeatureEnv } from "./env.ts";
 
-/** The extension's folder, next to index.ts, where logo.* is put. */
-const DIRECTORY = fileURLToPath(new URL("../", import.meta.url));
+/**
+ * The folder where logo.* is put: pie-boy/assets in Pi's agent directory, beside
+ * pie-boy/radio.json (features/radio.ts). No folder is no logo: Pi's logo is shown.
+ */
+export function assetsFolder(agentDir: string = getAgentDir()): string {
+  return join(agentDir, "pie-boy", "assets");
+}
 
 // Indexed by the eight dots in row-major order. Unicode 16's BLOCK OCTANT
 // characters omit patterns already represented by older block characters.
@@ -52,7 +56,7 @@ const COLUMNS = 40;
 const ROWS = 20;
 const SCENES = ["standby", "thinking", "tool", "error", "done"] as const;
 export type LogoScene = (typeof SCENES)[number];
-/** A logo.* file in the extension's folder: logo.png, logo.jpg, logo.webp, …, or logo-<scene>.* for one scene. */
+/** A logo.* file in the assets folder: logo.png, logo.jpg, logo.webp, …, or logo-<scene>.* for one scene. */
 const LOGO_FILE = new RegExp(`^logo(?:-(${SCENES.join("|")}))?\\..+$`, "i");
 
 /** Each pie-boy instance's logo, by its PieBoyState (see FeatureEnv). */
@@ -68,6 +72,7 @@ export function logoData(state: PieBoyState): Readonly<LogoData> {
 export function setupLogo(pi: ExtensionAPI, env: FeatureEnv): void {
   const data: LogoData = { version: 0, art: new Map(), scenes: new Map(), errors: new Map() };
   features.set(env.state, { data, env });
+  const directory = assetsFolder();
   let watcher: FSWatcher | undefined;
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
@@ -80,14 +85,14 @@ export function setupLogo(pi: ExtensionAPI, env: FeatureEnv): void {
     let image: Frame[] | undefined;
     let error: string | undefined;
     try {
-      const names = readdirSync(DIRECTORY).filter((name) => LOGO_FILE.test(name)).sort();
+      const names = readNames(directory).filter((name) => LOGO_FILE.test(name)).sort();
       if (names.length) {
         const { Animation } = await import("imagescript");
         // Hashes narrow the candidates; a byte comparison makes equality exact.
         const unique = new Map<string, { key: string; pixels: Uint8Array; image: Image }[]>();
         let nextKey = 0;
         const load = async (name: string): Promise<Frame[]> => {
-          const animation = await Animation.decode(readFileSync(join(DIRECTORY, name)));
+          const animation = await Animation.decode(readFileSync(join(directory, name)));
           return animation.frames.map((frame) => {
             const pixels = Uint8Array.from(frame.bitmap);
             for (let i = 0; i < pixels.length; i += 4) if (!pixels[i + 3]) pixels.fill(0, i, i + 3);
@@ -127,13 +132,45 @@ export function setupLogo(pi: ExtensionAPI, env: FeatureEnv): void {
     env.changed(data);
   }
 
+  const scheduleRead = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => { reloadTimer = undefined; void readLogo(); }, 50);
+  };
+  /** Watch the folder if it is there; without it, a later session_start tries again. */
+  const startWatching = () => {
+    const watched = folderId(directory);
+    if (watched === undefined) return;
+    try {
+      const current: FSWatcher = watch(directory, { persistent: false }, (_event, name) => {
+        // Removing the folder on Windows brings no error but a flood of events named
+        // after the folder, and a folder made again at once is another folder: either
+        // way the first event watches again whatever is there now.
+        if (folderId(directory) !== watched) return rewatch(current);
+        if (name && !LOGO_FILE.test(name.toString())) return;
+        scheduleRead();
+      });
+      current.on("error", () => rewatch(current));
+      watcher = current;
+    } catch {
+      watcher = undefined;
+    }
+  };
+  /**
+   * The watched folder went or was replaced: watch the one there now, and read it.
+   * Only for the watcher in use, so that an event late from one closed (by an earlier
+   * rewatch or session_shutdown) does not watch again.
+   */
+  const rewatch = (from: FSWatcher) => {
+    if (from !== watcher) return;
+    watcher.close();
+    watcher = undefined;
+    startWatching();
+    scheduleRead();
+  };
+
   pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui" || !ctx.hasUI || watcher) return;
-    watcher = watch(DIRECTORY, { persistent: false }, (_event, name) => {
-      if (name && !LOGO_FILE.test(name.toString())) return;
-      if (reloadTimer) clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(() => { reloadTimer = undefined; void readLogo(); }, 50);
-    });
+    startWatching();
     void readLogo();
   });
   pi.on("session_shutdown", () => {
@@ -146,6 +183,26 @@ export function setupLogo(pi: ExtensionAPI, env: FeatureEnv): void {
     data.art.clear();
     data.kitty = undefined;
   });
+}
+
+/** Which folder is at `path` now, to tell one made again from the one watched; undefined when there is none. */
+function folderId(path: string): string | undefined {
+  try {
+    const stats = statSync(path, { bigint: true });
+    return stats.isDirectory() ? `${stats.dev}:${stats.ino}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The names in `directory`; none when it does not exist. Other errors are thrown. */
+function readNames(directory: string): string[] {
+  try {
+    return readdirSync(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 function reason(error: unknown): string {
