@@ -28,10 +28,16 @@ pi install git:github.com/ZenkakuHiragana/pie-boy
 - CHAT: The conversation, with optional thinking and tool-log panels.
 - LOG: Tool execution history.
 
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/81bc6ca1-5a59-431f-8bfd-460f7c06b828" />
+
 ### STAT
 
 The agent's status: context usage, cache hit rate, 5-hour and weekly limits,
 and response history.
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/0a9a6b1a-e60e-4806-8f6a-0d5b466b0ff2" />
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/cda78e9f-47d9-4f9b-ab3a-84cc16f01d11" />
 
 ### INV
 
@@ -41,17 +47,25 @@ Inspect the agent's context and capabilities.
 - TOOLS: Tool definitions, including MCP and extension tools.
 - SKILLS: Skill definitions.
 
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/a3acc9e6-97b0-4f7a-bb72-e4c121aa5d77" />
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/08ab93ee-778f-4e23-bfed-b6ef25b0cdd1" />
+
 ### DATA
 
+- QUEST: A local TODO list, disabled by default. See [QUEST](#quest).
 - GIT: Diffs and commit history.
 - MODELS: Browse and switch models, like `/model`.
 - EXTENSIONS: Loaded extensions.
-- QUEST: A local TODO list, disabled by default. See [QUEST](#quest).
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/6ad4e938-0b4c-42ef-9882-3705e385ab3e" />
 
 ### MAP
 
 - TREE: Browse the conversation tree and preview messages, like `/tree`.
 - SESSIONS: Browse and resume saved sessions, like `/resume`.
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/5bb92f30-3efe-45ed-bd0f-10645cf00c63" />
 
 ### RADIO
 
@@ -60,6 +74,8 @@ Play music from YouTube, powered by [distubejs/ytdl-core](https://github.com/dis
 - STATIONS: Saved stations from `pie-boy/radio.json` in Pi's agent directory.
 - SEARCH: Find songs and playlists on YouTube Music to play or save.
 - OUTPUT: Choose an audio output device.
+
+<img width="1325" height="766" alt="image" src="https://github.com/user-attachments/assets/8595c4a2-672b-43db-800b-8358b895b5e8" />
 
 ## Customization
 
