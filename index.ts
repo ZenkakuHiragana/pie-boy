@@ -1,54 +1,59 @@
 /**
- * pie-boy: a tabbed, CRT-style screen for Pi's fullscreen TUI.
- *
- * Where things are:
- *
- *   shell/      the tabbed screen: tabs and pages (controller.ts), keys (input.ts),
- *               the editor border (editor.ts)
- *   screen/     drawing pieces: page layouts and their draggable boundaries,
- *               panel frames, tab bars
- *   features/   one file per feature: it subscribes to Pi's events and keeps its
- *               own data (see features/env.ts)
- *   panels/     one file per group of panels; each registers its panels by id
- *   state/      data shapes and the work on them that does not need Pi's events
- *   layout.ts   the tabs, their pages and the layout of each page
- *
- * Adding a feature touches its own files, a setup line here, an import line in
- * panels/index.ts and, for a new page, layout.ts.
+ * Pie-boy entry point. Read config before importing feature and panel implementations.
+ * Disabled optional features are not imported or initialized. Shared core data stays
+ * active for the panels that still use it (for example TERM LOG and STAT).
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { setupContext } from "./features/context.ts";
-import { setupExtensions } from "./features/extensions.ts";
-import { setupGit } from "./features/git.ts";
-import { setupImages } from "./features/image.ts";
-import { setupInventory } from "./features/inv.ts";
-import { setupLogo } from "./features/logo.ts";
-import { setupModels } from "./features/models.ts";
-import { setupRadio } from "./features/radio.ts";
-import { setupSessions } from "./features/sessions.ts";
-import { setupTools } from "./features/tools.ts";
-import { setupTree } from "./features/tree.ts";
-import { setupUsage } from "./features/usage.ts";
-import { setupVitals } from "./features/vitals.ts";
-import "./panels/index.ts";
-import { createShell } from "./shell/controller.ts";
-import { setupInput } from "./shell/input.ts";
+import { readConfig } from "./config.ts";
 
-export default function (pi: ExtensionAPI) {
-  const shell = createShell(pi);
-  setupInput(pi, shell);
+export default async function (pi: ExtensionAPI): Promise<void> {
+  const config = readConfig();
+  const [layout, input, controller, panels, bindings, context, extensions, git, images,
+    inventory, models, sessions, tools, tree, usage, vitals] = await Promise.all([
+    import("./layout.ts"), import("./shell/input.ts"), import("./shell/controller.ts"),
+    import("./panels/index.ts"), import("./keybindings.ts"), import("./features/context.ts"),
+    import("./features/extensions.ts"), import("./features/git.ts"), import("./features/image.ts"),
+    import("./features/inv.ts"), import("./features/models.ts"), import("./features/sessions.ts"),
+    import("./features/tools.ts"), import("./features/tree.ts"), import("./features/usage.ts"),
+    import("./features/vitals.ts"),
+  ]);
+  await panels.loadPanels(config);
+  let art: import("./panels/status-art.ts").StatusArt | undefined;
+  let logo: typeof import("./features/logo.ts") | undefined;
+  if (config.stat.art !== "off") {
+    const { createStatusArt } = await import("./panels/status-art.ts");
+    if (config.stat.art === "auto") logo = await import("./features/logo.ts");
+    art = createStatusArt(logo, config.stat.kitty);
+  }
+  const keys = bindings.createKeybindings(config.keybindings);
+  const shell = controller.createShell(pi, layout.createTabs(config), art, keys);
+  input.setupInput(pi, shell);
   const env = shell.features;
-  setupTools(pi, env);
-  setupGit(pi, env);
-  setupContext(pi, env);
-  setupUsage(pi, env);
-  setupVitals(pi, env);
-  setupLogo(pi, env);
-  setupImages(pi, env);
-  setupSessions(pi, env);
-  setupModels(pi, env);
-  setupExtensions(pi, env);
-  setupTree(pi, env);
-  setupInventory(pi, env);
-  setupRadio(pi, env);
+  tools.setupTools(pi, env, config.chat.thinking);
+  git.setupGit(pi, env);
+  context.setupContext(pi, env);
+  usage.setupUsage(pi, env);
+  vitals.setupVitals(pi, env);
+  logo?.setupLogo(pi, env);
+  images.setupImages(pi, env);
+  sessions.setupSessions(pi, env);
+  models.setupModels(pi, env);
+  extensions.setupExtensions(pi, env);
+  tree.setupTree(pi, env);
+  inventory.setupInventory(pi, env);
+  if (config.radio.enabled) {
+    const { setupRadio } = await import("./features/radio.ts");
+    setupRadio(pi, env);
+  } else {
+    const { stopRadio } = await import("./state/radio-lifetime.ts");
+    pi.on("session_start", (_event, ctx) => {
+      if (ctx.mode === "tui" && ctx.hasUI) stopRadio();
+    });
+  }
+  if (config.quest.enabled) {
+    const [{ setupQuests }, { createMarkdownQuestStore }] = await Promise.all([
+      import("./features/quests.ts"), import("./state/quests.ts"),
+    ]);
+    setupQuests(pi, env, createMarkdownQuestStore());
+  }
 }

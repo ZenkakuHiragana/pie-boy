@@ -46,6 +46,7 @@ import type { Ytdl } from "@distube/ytdl-core";
 import type { Sdl } from "@kmamal/sdl";
 import { type PieBoyState, sanitize } from "../state/core.ts";
 import type { FeatureEnv } from "./env.ts";
+import { RADIO } from "../state/radio-lifetime.ts";
 
 /**
  * The ids of NOW PLAYING (panels/radio.ts draws it and asks for its own redraws),
@@ -302,7 +303,7 @@ function atVolume(pcm: Buffer, volume: number): Buffer {
  * whenever a session, a subagent's included, is made in another working directory
  * than the last one (core/extensions/loader.js, extensionCache).
  */
-const RADIO = Symbol.for("pie-boy.radio");
+
 const shared = globalThis as { [RADIO]?: RadioControl };
 
 /* ------------------------------------------------------------ for the panels */

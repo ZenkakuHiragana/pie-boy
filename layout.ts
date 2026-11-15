@@ -42,6 +42,7 @@
  * terminal, Pi does not draw an image whose top row has scrolled out of view,
  * and Mermaid diagrams wider than the transcript fall back to source code.
  */
+import { DEFAULT_CONFIG, type PieBoyConfig } from "./config.ts";
 import type { TabDef } from "./screen/layout.ts";
 
 const tabs: TabDef[] = [
@@ -184,5 +185,33 @@ const tabs: TabDef[] = [
     ],
   },
 ];
+
+/** Select optional pages and CHAT panels before the shell is constructed. */
+export function createTabs(config: PieBoyConfig = DEFAULT_CONFIG): TabDef[] {
+  const { thinking, toolLog } = config.chat;
+  const left = thinking ? { column: [{ panel: "thinking", size: "20%" as const }, "transcript"] } : "transcript";
+  const top = [thinking ? "thinking" : undefined, toolLog ? "tools" : undefined].filter((id): id is string => id !== undefined);
+  const wide = toolLog ? { row: [left, { panel: "toollog", size: "43%" as const }] } : left;
+  const narrow = top.length ? { column: [
+    top.length === 2 ? { row: ["thinking", { panel: "tools", size: "34%" as const }], size: "20%" as const } : { panel: top[0]!, size: "20%" as const },
+    "transcript",
+  ] } : "transcript";
+  return tabs.filter((tab) => config.radio.enabled || tab.label !== "RADIO").map((tab) => {
+    if (!("pages" in tab)) return tab;
+    if (tab.label === "TERM") return { ...tab, pages: tab.pages.map((page) => page.label === "CHAT" ? {
+      ...page, layout: { minWidth: 160, wide, narrow },
+    } : page) };
+    if (tab.label === "DATA" && config.quest.enabled) return { ...tab, pages: [{
+      label: "QUEST",
+      layout: {
+        minWidth: 120,
+        wide: { row: [{ panel: "questlist", size: "50%" }, "questdetail"] },
+        narrow: { column: [{ panel: "questlist", size: "30%" }, "questdetail"] },
+      },
+      primary: "questdetail",
+    }, ...tab.pages] };
+    return tab;
+  });
+}
 
 export default tabs;

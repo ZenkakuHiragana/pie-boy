@@ -1,58 +1,11 @@
-/**
- * TERM's panels: THINKING, the one-line TOOL LOG, and the execution log.
- */
-import { type Component, type TuiMouseEvent, type TuiMouseEventResult, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+/** TERM LOG's execution history, also used by CHAT when enabled. */
+import { type Component, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { framed } from "../screen/frame.ts";
-import { Lines } from "../screen/lines.ts";
 import { toolData } from "../features/tools.ts";
-import { type LogItem, THINKING_TAIL, type ToolEntry, toggleLog } from "../state/tools.ts";
-import { Selection, spinner, withCursor } from "./common.ts";
+import { type LogItem, toggleLog } from "../state/tools.ts";
+import { Selection, withCursor } from "./common.ts";
 import { type PanelEnv, registerPanel } from "./registry.ts";
-
-registerPanel("thinking", (env) =>
-  framed(
-    env.theme,
-    () => {
-      // The panel follows the end, so a note above the text would scroll away; the title says it.
-      const data = toolData(env.state);
-      const trimmed = data.thinkingTrimmed || data.thinking.length > THINKING_TAIL;
-      const title = trimmed ? `THINKING  …last ${THINKING_TAIL} chars` : "THINKING";
-      return env.state.agentRunning ? `${title} ${spinner(env.every(120))}` : title;
-    },
-    new Lines(
-      (width) => {
-        const t = env.theme();
-        const text = toolData(env.state).thinking.slice(-THINKING_TAIL);
-        if (!text) return [t.fg("dim", " -- no thinking yet --")];
-        return wrapTextWithAnsi(text, Math.max(1, width - 2)).map((line) => ` ${t.fg("thinkingText", line)}`);
-      },
-      () => [toolData(env.state).toolsVersion],
-    ),
-    "end",
-    () => env.focused("thinking"),
-  ));
-
-registerPanel("tools", (env) =>
-  framed(
-    env.theme,
-    () => {
-      const data = toolData(env.state);
-      return `TOOL LOG${data.toolsTrimmed ? `  last ${data.tools.length}` : ""}  ✓ ${data.ok} ✗ ${data.failed}`;
-    },
-    new Lines(
-      () => {
-        const t = env.theme();
-        const tools = toolData(env.state).tools;
-        if (!tools.length) return [t.fg("dim", " -- no tool calls yet --")];
-        return tools.map((tool) => toolLine(env, tool));
-      },
-      // Spinners of running tools move only while the agent runs.
-      () => [toolData(env.state).toolsVersion, env.state.agentRunning ? env.every(120) : -1],
-    ),
-    "end",
-    () => env.focused("tools"),
-  ));
 
 registerPanel("toollog", (env) => {
   const selection = new Selection(
@@ -163,17 +116,4 @@ class ToolLogView implements Component {
     }
     return entry.component;
   }
-}
-
-function toolLine(env: PanelEnv, tool: ToolEntry): string {
-  const t = env.theme();
-  const mark =
-    tool.status === "running"
-      ? t.fg("warning", spinner(env.every(120)))
-      : tool.status === "ok"
-        ? t.fg("success", "✓")
-        : t.fg("error", "✗");
-  const indent = tool.nested ? "  ↳" : "";
-  const time = tool.durationMs === undefined ? "" : t.fg("dim", ` ${(tool.durationMs / 1000).toFixed(1)}s`);
-  return ` ${indent}${mark} ${t.fg("toolTitle", tool.name)} ${t.fg("muted", tool.summary)}${time}`;
 }

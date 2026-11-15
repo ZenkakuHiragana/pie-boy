@@ -1,7 +1,7 @@
 /** The tab shortcuts and the keys routed to the selected panel. */
 import { decodeKittyPrintable, getKeybindings, isKeyRelease, type KeyId, matchesKey } from "@earendil-works/pi-tui";
-import { type ExtensionAPI, rawKeyHint } from "@earendil-works/pi-coding-agent";
-import tabs from "../layout.ts";
+import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { bindingHint, createKeybindings, type PieBoyAction, type PieBoyKeys } from "../keybindings.ts";
 import { type ListControl, VIEWPORT_KEYS } from "../panels/registry.ts";
 import type { ThemeRef } from "../screen/lines.ts";
 import type { Shell } from "./controller.ts";
@@ -14,14 +14,15 @@ import type { Shell } from "./controller.ts";
 const PASS_THROUGH: KeyId[] = ["escape", "ctrl+c"];
 
 /** The panel-mode keys, as the editor border shows them. */
-export function panelHints(theme: ThemeRef): string {
+export function panelHints(theme: ThemeRef, keys: PieBoyKeys = createKeybindings()): string {
   return [
-    rawKeyHint("↑↓/jk", "move"),
-    rawKeyHint("tab", "panel"),
-    rawKeyHint("enter", "open"),
-    rawKeyHint("z", "max"),
-    rawKeyHint("alt+o", "editor"),
-  ].join(theme().fg("dim", " · "));
+    bindingHint(keys, "pieBoy.panel.up", "up"),
+    bindingHint(keys, "pieBoy.panel.down", "down"),
+    bindingHint(keys, "pieBoy.panel.next", "panel"),
+    bindingHint(keys, "pieBoy.panel.activate", "open"),
+    bindingHint(keys, "pieBoy.panel.maximize", "max"),
+    bindingHint(keys, "pieBoy.focus.toggle", "editor"),
+  ].filter(Boolean).join(theme().fg("dim", " · "));
 }
 
 /**
@@ -71,6 +72,11 @@ export function scrollTarget(shell: Shell): string | undefined {
 
 export function setupInput(pi: ExtensionAPI, shell: Shell): void {
   let unsubscribe: (() => void) | undefined;
+  const keys = shell.keys;
+  const globalActions: PieBoyAction[] = [
+    ...shell.tabs.map((tab) => `pieBoy.tab.${tab.label.toLowerCase()}` as PieBoyAction),
+    "pieBoy.tab.next", "pieBoy.tab.previous", "pieBoy.page.next", "pieBoy.page.previous", "pieBoy.focus.toggle",
+  ];
 
   const focusedHandle = () => {
     const id = shell.focusedId();
@@ -79,19 +85,19 @@ export function setupInput(pi: ExtensionAPI, shell: Shell): void {
 
   const panelAction = (data: string): boolean => {
     const handle = focusedHandle();
-    if (matchesKey(data, "down") || matchesKey(data, "j")) handle?.list ? handle.list.move(1) : handle?.scroll?.scrollBy(1);
-    else if (matchesKey(data, "up") || matchesKey(data, "k")) handle?.list ? handle.list.move(-1) : handle?.scroll?.scrollBy(-1);
-    else if (matchesKey(data, "home")) handle?.list ? handle.list.toStart() : handle?.scroll?.scrollToStart();
-    else if (matchesKey(data, "end")) handle?.list ? handle.list.toEnd() : handle?.scroll?.scrollToEnd();
-    else if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
+    if (keys.matches(data, "pieBoy.panel.down")) handle?.list ? handle.list.move(1) : handle?.scroll?.scrollBy(1);
+    else if (keys.matches(data, "pieBoy.panel.up")) handle?.list ? handle.list.move(-1) : handle?.scroll?.scrollBy(-1);
+    else if (keys.matches(data, "pieBoy.panel.start")) handle?.list ? handle.list.toStart() : handle?.scroll?.scrollToStart();
+    else if (keys.matches(data, "pieBoy.panel.end")) handle?.list ? handle.list.toEnd() : handle?.scroll?.scrollToEnd();
+    else if (keys.matches(data, "pieBoy.panel.next") || keys.matches(data, "pieBoy.panel.previous")) {
       const ids = shell.visiblePanels();
       if (ids.length) {
-        const step = matchesKey(data, "tab") ? 1 : -1;
+        const step = keys.matches(data, "pieBoy.panel.next") ? 1 : -1;
         const at = Math.max(0, ids.indexOf(shell.focusedId() ?? ""));
         shell.focusPanel(ids[(at + step + ids.length) % ids.length]!);
       }
-    } else if (matchesKey(data, "enter")) handle?.list?.activate();
-    else if (matchesKey(data, "z")) shell.toggleMaximized();
+    } else if (keys.matches(data, "pieBoy.panel.activate")) handle?.list?.activate();
+    else if (keys.matches(data, "pieBoy.panel.maximize")) shell.toggleMaximized();
     else if (!handle?.list?.key?.(data)) return false;
     return true;
   };
@@ -142,10 +148,10 @@ export function setupInput(pi: ExtensionAPI, shell: Shell): void {
     const typing = typingList(shell);
     if (typing) {
       if (matchesKey(data, "ctrl+c")) return undefined;
-      // Alt+O gives the keys to the editor wherever it is pressed; closing the
+      // The focus-toggle action gives the keys to the editor; closing the
       // field first, as a click on the editor does.
-      if (matchesKey(data, "alt+o")) {
-        typing.key?.("\x1b");
+      if (keys.matches(data, "pieBoy.focus.toggle")) {
+        typing.cancel?.();
         shell.setPanelMode(false);
       } else typing.key?.(data);
       shell.requestRender();
@@ -156,6 +162,8 @@ export function setupInput(pi: ExtensionAPI, shell: Shell): void {
     const keybindings = getKeybindings();
     if (VIEWPORT_KEYS.some(({ keys }) => keys.some((key) => keybindings.matches(data, key)))) return undefined;
     if (PASS_THROUGH.some((key) => matchesKey(data, key))) return undefined;
+    // Printable extension shortcuts must reach Pi before stray panel text is consumed.
+    if (globalActions.some((action) => keys.matches(data, action))) return undefined;
     if (!panelAction(data)) {
       // Text a panel has no use for is not typed into the editor, so that a stray
       // key and Enter cannot send a prompt. In an empty editor, `/` (a command) and
@@ -186,34 +194,20 @@ export function setupInput(pi: ExtensionAPI, shell: Shell): void {
     unsubscribe = undefined;
   });
 
-  tabs.slice(0, 9).forEach((tab, index) => {
-    pi.registerShortcut(`alt+${index + 1}` as "alt+1", {
-      description: `pie-boy: show the ${tab.label} tab`,
-      handler: () => shell.selectTab(index),
-    });
-  });
-  pi.registerShortcut("alt+j", {
-    description: "pie-boy: next tab",
-    handler: () => shell.stepTab(1),
-  });
-  pi.registerShortcut("alt+k", {
-    description: "pie-boy: previous tab",
-    handler: () => shell.stepTab(-1),
-  });
-  pi.registerShortcut("alt+h", {
-    description: "pie-boy: previous inner tab",
-    handler: () => shell.stepPage(-1),
-  });
-  pi.registerShortcut("alt+l", {
-    description: "pie-boy: next inner tab",
-    handler: () => shell.stepPage(1),
-  });
-  pi.registerShortcut("alt+o", {
-    description: "pie-boy: switch the keys between editor and panels",
-    handler: () => {
-      if (!shell.tabsShown()) return;
-      shell.setPanelMode(!shell.panelMode());
-      shell.requestRender();
-    },
+  const shortcut = (action: PieBoyAction, description: string, handler: () => void) => {
+    for (const key of keys.getKeys(action)) pi.registerShortcut(key, { description: `pie-boy: ${description}`, handler });
+  };
+  for (const name of ["term", "stat", "inv", "data", "map", "radio"] as const) {
+    const index = shell.tabs.findIndex((tab) => tab.label === name.toUpperCase());
+    if (index >= 0) shortcut(`pieBoy.tab.${name}`, `show the ${name.toUpperCase()} tab`, () => shell.selectTab(index));
+  }
+  shortcut("pieBoy.tab.next", "next tab", () => shell.stepTab(1));
+  shortcut("pieBoy.tab.previous", "previous tab", () => shell.stepTab(-1));
+  shortcut("pieBoy.page.next", "next inner tab", () => shell.stepPage(1));
+  shortcut("pieBoy.page.previous", "previous inner tab", () => shell.stepPage(-1));
+  shortcut("pieBoy.focus.toggle", "switch the keys between editor and panels", () => {
+    if (!shell.tabsShown()) return;
+    shell.setPanelMode(!shell.panelMode());
+    shell.requestRender();
   });
 }

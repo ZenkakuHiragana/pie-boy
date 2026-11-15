@@ -25,6 +25,7 @@ import {
   toolsVersion,
   version,
 } from "../features/inv.ts";
+import { bindingText, panelKeys } from "../keybindings.ts";
 import { framed } from "../screen/frame.ts";
 import { Lines, type ThemeRef } from "../screen/lines.ts";
 import { alignedRow, compactNumber, ListLines, originNote, Selection, textCounterRows, withCursor } from "./common.ts";
@@ -325,7 +326,7 @@ registerPanel("tooldetail", (env) =>
         if (heading) return groupDetail(env, heading, width);
       }
       const item = tools(env.state).find((tool) => tool.name === name);
-      if (!item) return [t.fg("dim", " -- pick a tool: Enter or a click --")];
+      if (!item) return [t.fg("dim", ` -- pick a tool: ${bindingText(panelKeys(env), "pieBoy.panel.activate") ? `${bindingText(panelKeys(env), "pieBoy.panel.activate")} or a click` : "a click"} --`)];
       const state = item.active ? t.fg("success", "active") : t.fg("dim", "not active");
       const cost = item.active
         ? item.origin === "built"
@@ -425,7 +426,7 @@ registerPanel("skilltext", (env) =>
       const t = env.theme();
       const name = picks(env.state).skill;
       const item = skills(env.state).items.find((skill) => skill.name === name);
-      if (!item) return [t.fg("dim", " -- pick a skill: Enter or a click --")];
+      if (!item) return [t.fg("dim", ` -- pick a skill: ${bindingText(panelKeys(env), "pieBoy.panel.activate") ? `${bindingText(panelKeys(env), "pieBoy.panel.activate")} or a click` : "a click"} --`)];
       const lines = [` ${t.fg("dim", item.filePath)}`, ...wrap(item.description, width, (line) => t.fg("muted", line)), ""];
       if (item.bodyError) lines.push(` ${t.fg("error", item.bodyError)}`);
       else if (item.body === undefined) lines.push(t.fg("dim", " -- reading --"));

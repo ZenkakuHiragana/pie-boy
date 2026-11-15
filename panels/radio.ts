@@ -1,4 +1,5 @@
 /**
+ * Keys described below are defaults; active bindings come from config.
  * RADIO's panels: STATIONS (the stations in radio.json), SEARCH (a search box and
  * the playlists and songs it found), OUTPUT (the output devices) and NOW PLAYING.
  * Enter on a station, a playlist or a song plays it, or stops it when it is
@@ -10,7 +11,7 @@
  * ListControl.typing); Enter searches, Esc or Tab leaves it, and Alt+O leaves it
  * and gives the keys to the editor (shell/input.ts).
  */
-import { Input, matchesKey, sliceByColumn, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Input, getKeybindings, sliceByColumn, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import {
   addPlaylist,
   changeVolume,
@@ -40,6 +41,7 @@ import {
   toggleStation,
   type Track,
 } from "../features/radio.ts";
+import { bindingText, panelKeys } from "../keybindings.ts";
 import { framed, type SizedView } from "../screen/frame.ts";
 import { Lines } from "../screen/lines.ts";
 import { noSignalLines } from "../screen/nosignal.ts";
@@ -48,9 +50,9 @@ import { type ListControl, type PanelEnv, registerPanel } from "./registry.ts";
 
 /** The keys every RADIO panel shares; returns whether the key was one. */
 function radioKey(env: PanelEnv, data: string): boolean {
-  if (matchesKey(data, "n")) nextTrack(env.state);
-  else if (matchesKey(data, "+") || matchesKey(data, "=")) changeVolume(env.state, 0.1);
-  else if (matchesKey(data, "-")) changeVolume(env.state, -0.1);
+  if (panelKeys(env).matches(data, "pieBoy.radio.next")) nextTrack(env.state);
+  else if (panelKeys(env).matches(data, "pieBoy.radio.volumeUp")) changeVolume(env.state, 0.1);
+  else if (panelKeys(env).matches(data, "pieBoy.radio.volumeDown")) changeVolume(env.state, -0.1);
   else return false;
   return true;
 }
@@ -101,7 +103,7 @@ registerPanel("stations", (env) => {
     () => keys(radioData(env.state).stations),
     (index) => toggleStation(env.state, index),
     (data) => {
-      if (!matchesKey(data, "delete")) {
+      if (!panelKeys(env).matches(data, "pieBoy.radio.deleteStation")) {
         armed.key = undefined;
         return radioKey(env, data);
       }
@@ -116,7 +118,10 @@ registerPanel("stations", (env) => {
   );
   const panel = framed(
     env.theme,
-    () => "STATIONS  ·  DEL ×2: remove",
+    () => {
+      const key = bindingText(panelKeys(env), "pieBoy.radio.deleteStation");
+      return `STATIONS${key ? `  ·  ${key.toUpperCase()} ×2: remove` : ""}`;
+    },
     new ListLines(
       selection,
       (width) => {
@@ -185,9 +190,10 @@ function stationLines(env: PanelEnv, selection: Selection, armed: unknown, width
     if (!armedHere) lines.push(spread(name, place, width));
     else {
       // The note is kept on a narrow panel: the name gives way to it, and then it shortens.
-      const note = t.fg("error", "DEL AGAIN TO REMOVE");
+      const key = bindingText(panelKeys(env), "pieBoy.radio.deleteStation").toUpperCase();
+      const note = t.fg("error", `${key} AGAIN TO REMOVE`);
       if (visibleWidth(name) + visibleWidth(note) + 1 <= width) lines.push(spread(name, note, width));
-      else lines.push(truncateToWidth(` ${t.fg("error", width > visibleWidth(note) ? "DEL AGAIN TO REMOVE" : "DEL AGAIN")}`, width));
+      else lines.push(truncateToWidth(` ${t.fg("error", width > visibleWidth(note) ? `${key} AGAIN TO REMOVE` : `${key} AGAIN`)}`, width));
     }
   });
   if (!data.stations.length && !data.stationsError) lines.push(t.fg("dim", " -- no stations --"));
@@ -223,8 +229,7 @@ registerPanel("radiosearch", (env) => {
     leave();
     searchSongs(env.state, value);
   };
-  // Esc leaves the text as typed, so that entering the box again continues it.
-  input.onEscape = leave;
+  // Cancelling leaves the text as typed, so entering the box again continues it.
 
   const itemAt = (index: number): SearchItem | undefined => searchItems(radioData(env.state).search)[index];
   const selection = new RadioSelection(
@@ -243,21 +248,24 @@ registerPanel("radiosearch", (env) => {
     },
     (data) => {
       if (!typing) {
-        if (!matchesKey(data, "a")) return radioKey(env, data);
+        if (!panelKeys(env).matches(data, "pieBoy.radio.addPlaylist")) return radioKey(env, data);
         const item = itemAt(selection.index);
         if (item?.kind === "playlist") addPlaylist(env.state, item.playlist);
         return item?.kind === "playlist";
       }
       typed++;
-      if (matchesKey(data, "escape") || matchesKey(data, "tab")) leave();
+      if (panelKeys(env).matches(data, "pieBoy.field.cancel")) leave();
       else input.handleInput(data);
       return true;
     },
   );
-  const list: ListControl = Object.assign(selection, { typing: () => typing });
+  const list: ListControl = Object.assign(selection, { typing: () => typing, cancel: leave });
   const panel = framed(
     env.theme,
-    () => "SEARCH  ·  a: add playlist",
+    () => {
+      const key = bindingText(panelKeys(env), "pieBoy.radio.addPlaylist");
+      return `SEARCH${key ? `  ·  ${key}: add playlist` : ""}`;
+    },
     new ListLines(
       selection,
       (width) => {
@@ -287,7 +295,10 @@ function searchLines(env: PanelEnv, selection: Selection, input: Input, typing: 
     lines.push(` ${t.fg("border", `┌${"─".repeat(inner)}┐`)}`);
     lines.push(` ${t.fg("border", "│")}${field}${" ".repeat(Math.max(0, inner - visibleWidth(field)))}${t.fg("border", "│")}`);
     lines.push(` ${t.fg("border", `└${"─".repeat(inner)}┘`)}`);
-    lines.push(truncateToWidth(`   ${t.fg("dim", "ENTER search   ESC cancel")}`, width));
+    const submit = getKeybindings().getKeys("tui.input.submit").join("/");
+    const cancel = bindingText(panelKeys(env), "pieBoy.field.cancel");
+    const hints = [submit && `${submit.toUpperCase()} search`, cancel && `${cancel.toUpperCase()} cancel`].filter(Boolean).join("   ");
+    if (hints) lines.push(truncateToWidth(`   ${t.fg("dim", hints)}`, width));
   } else {
     selection.place(0, 0, 1);
     const text = search.query ? t.fg("text", search.query) : t.fg("dim", "search YouTube");
@@ -505,7 +516,13 @@ function nowPlayingLines(env: PanelEnv, width: number, height: number): string[]
 function keyHints(env: PanelEnv): string {
   const t = env.theme();
   const key = (keys: string, what: string) => `${t.fg("accent", keys)} ${t.fg("dim", what)}`;
-  return `   ${[key("n", "next"), key("+/-", "volume")].join(t.fg("dim", " · "))}`;
+  const keys = panelKeys(env);
+  const parts = [
+    [bindingText(keys, "pieBoy.radio.next"), "next"],
+    [bindingText(keys, "pieBoy.radio.volumeUp"), "volume up"],
+    [bindingText(keys, "pieBoy.radio.volumeDown"), "volume down"],
+  ].filter(([binding]) => binding).map(([binding, what]) => key(binding!, what!));
+  return parts.length ? `   ${parts.join(t.fg("dim", " · "))}` : "";
 }
 
 /** Rows NOW PLAYING has besides the waveform while a track plays, with the key row and the blank row above it. */
@@ -538,7 +555,8 @@ function playerLines(env: PanelEnv, data: Readonly<RadioData>, width: number, he
   });
   const track = data.track;
   if (data.status === "idle" || !data.source) {
-    const hint = "ENTER TO TUNE IN";
+    const activate = bindingText(panelKeys(env), "pieBoy.panel.activate");
+    const hint = activate ? `${activate.toUpperCase()} OR CLICK A STATION TO TUNE IN` : "CLICK A STATION TO TUNE IN";
     return [...wave, "", fit(" ".repeat(Math.max(0, Math.floor((width - hint.length) / 2))) + t.fg("muted", hint))];
   }
   const lines: string[] = [];

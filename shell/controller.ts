@@ -53,7 +53,9 @@ import {
   ToolExecutionComponent,
   type ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import tabs from "../layout.ts";
+import defaultTabs from "../layout.ts";
+import { createKeybindings, type PieBoyKeys } from "../keybindings.ts";
+import type { StatusArt } from "../panels/status-art.ts";
 import type { FeatureEnv } from "../features/env.ts";
 import { PANELS, type PanelEnv, type PanelHandle } from "../panels/registry.ts";
 import { framed } from "../screen/frame.ts";
@@ -121,6 +123,8 @@ const pagesOf = (tab: TabDef): PageDef[] =>
 
 /** What the keys (shell/input.ts) and the editor border (shell/editor.ts) use of the shell. */
 export interface Shell {
+  readonly tabs: readonly TabDef[];
+  readonly keys: PieBoyKeys;
   readonly state: PieBoyState;
   /** What the features in features/ get. */
   readonly features: FeatureEnv;
@@ -160,7 +164,7 @@ export interface Shell {
   stepPage(step: number): void;
 }
 
-export function createShell(pi: ExtensionAPI): Shell {
+export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultTabs, statusArt?: StatusArt, keys = createKeybindings()): Shell {
   const state = createState();
   const pages = tabs.map(pagesOf);
   let ctxRef: ExtensionContext | undefined;
@@ -306,6 +310,7 @@ export function createShell(pi: ExtensionAPI): Shell {
   };
 
   const env: PanelEnv = {
+    statusArt, keys,
     theme,
     state,
     now, every, redrawAt,
@@ -594,6 +599,7 @@ export function createShell(pi: ExtensionAPI): Shell {
   };
 
   const shell: Shell = {
+    tabs, keys,
     state,
     features: {
       state,

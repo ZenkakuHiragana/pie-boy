@@ -15,3 +15,12 @@ await (await import('./foreground.mjs')).default();
 await (await import('./radio-stations.mjs')).default();
 await (await import('./logo-assets.mjs')).default();
 console.log('panel layout assertions passed');
+
+await (await import('./config.mjs')).default();
+await (await import('./status-art.mjs')).default();
+await (await import('./quests.mjs')).default();
+await (await import('./quest-store.mjs')).default();
+await (await import('./panel-keys.mjs')).default();
+await (await import('./config-startup.mjs')).default();
+await (await import('./input.mjs')).default();
+console.log('configuration, optional imports, input and QUEST assertions passed');

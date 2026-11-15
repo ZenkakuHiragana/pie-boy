@@ -39,7 +39,9 @@ function borderLabel(shell: Shell, width: number): string {
   let label = status + mark;
   if (shell.typingIgnored()) {
     const left = width - visibleWidth(label);
-    const text = left >= 14 ? " ALT+O TO TYPE" : truncateToWidth("ALT+O TO TYPE", left, "");
+    const binding = shell.keys.getKeys("pieBoy.focus.toggle").join("/").toUpperCase();
+    const hint = binding ? `${binding} TO TYPE` : "CLICK EDITOR TO TYPE";
+    const text = left >= hint.length + 1 ? ` ${hint}` : truncateToWidth(hint, left, "");
     label += t.fg(shell.every(480) % 2 === 0 ? "warning" : "accent", t.bold(text));
   } else {
     // The panel's name, as its title rule shows it (without what the title adds after two spaces).
@@ -50,7 +52,7 @@ function borderLabel(shell: Shell, width: number): string {
     label += name;
   }
   const left = width - visibleWidth(label);
-  return left > 8 ? label + truncateToWidth(`  ${panelHints(shell.theme)}`, left) : label;
+  return left > 8 ? label + truncateToWidth(`  ${panelHints(shell.theme, shell.keys)}`, left) : label;
 }
 
 /**
@@ -63,13 +65,13 @@ const BOTTOM_MARK = "\x1b_pie-boy:bottom\x07";
  * The line of an empty editor while a panel has the keys: the cursor, then hatching
  * with how to type in its middle, as a field that does not take keys.
  */
-function emptyLine(paddingX: number, width: number): string {
+function emptyLine(paddingX: number, width: number, binding: string): string {
   // The editor's padding, as much of it as leaves room for the cursor; the line is
   // cut to the width below. On a screen narrower than the padding, the cursor may sit
   // apart from where the editor draws it once it has the keys.
   const padding = Math.min(paddingX, Math.max(0, width - 1));
   const inner = width - padding * 2;
-  const hint = " alt+o to type ";
+  const hint = ` ${binding ? `${binding} to type` : "click editor to type"} `;
   // The hint is centred in the field, the cursor's cell included.
   const before = Math.max(0, Math.floor((inner - hint.length) / 2) - 1);
   const after = Math.max(0, inner - 1 - before - hint.length);
@@ -107,7 +109,7 @@ export function pieBoyEditor(shell: Shell, onRender: () => void, ...args: Editor
     override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
       const result = super.handleMouse(event);
       if (event.type === "click" && event.button === "left" && result?.handled && shell.tabsShown()) {
-        typingList(shell)?.key?.("\x1b");
+        typingList(shell)?.cancel?.();
         shell.setPanelMode(false);
         shell.requestRender();
       }
@@ -127,7 +129,7 @@ export function pieBoyEditor(shell: Shell, onRender: () => void, ...args: Editor
       this.focused = false;
       try {
         const [top = "", ...rest] = super.render(width);
-        if (this.getText() === "" && rest.length > 1) rest[0] = emptyLine(this.getPaddingX(), width);
+        if (this.getText() === "" && rest.length > 1) rest[0] = emptyLine(this.getPaddingX(), width, shell.keys.getKeys("pieBoy.focus.toggle").join("/"));
         return [
           top,
           ...rest.map((line) => (line.startsWith(BOTTOM_MARK) ? line.slice(BOTTOM_MARK.length) : `\x1b[2m${line}\x1b[22m`)),

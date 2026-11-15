@@ -421,7 +421,7 @@ type BranchMessage = {
  * the lists are full and the latest thinking is found, or after MAX_WALK entries.
  * Arguments and results are clipped like those of new calls.
  */
-export function rebuildFromBranch(data: ToolData, session: BranchReader): void {
+export function rebuildFromBranch(data: ToolData, session: BranchReader, collectThinking = true): void {
   data.lastErrorAt = undefined;
   data.active.clear();
   const results = new Map<string, BranchMessage>();
@@ -436,7 +436,7 @@ export function rebuildFromBranch(data: ToolData, session: BranchReader): void {
       if (msg?.role === "toolResult" && typeof msg.toolCallId === "string") {
         results.set(msg.toolCallId, msg);
       } else if (msg?.role === "assistant") {
-        if (!thinking?.text) thinking = thinkingTail(msg);
+        if (collectThinking && !thinking?.text) thinking = thinkingTail(msg);
         const blocks = Array.isArray(msg.content) ? (msg.content as Array<Record<string, unknown>>) : [];
         for (let index = blocks.length - 1; index >= 0; index--) {
           const block = blocks[index];
@@ -471,7 +471,7 @@ export function rebuildFromBranch(data: ToolData, session: BranchReader): void {
       }
     }
     // Past MAX_TOOLS calls, keep walking only until one more call shows that older calls exist.
-    if (calls.length >= MAX_TOOLS && thinking?.text && skipped) break;
+    if (calls.length >= MAX_TOOLS && (!collectThinking || thinking?.text) && skipped) break;
     entry = entry.parentId ? session.getEntry(entry.parentId) : undefined;
   }
   // Older calls were left out, or the walk stopped (MAX_WALK) before it could tell.

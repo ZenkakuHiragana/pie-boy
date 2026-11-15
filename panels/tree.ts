@@ -51,7 +51,6 @@ import {
   Input,
   type Keybinding,
   Markdown,
-  matchesKey,
   truncateToWidth,
   type TuiMouseEvent,
   type TuiMouseEventResult,
@@ -59,6 +58,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { contextUsage } from "../features/context.ts";
 import { canLabel, copyEntry, initialFilter, jumpedBefore, jumpsBefore, jumpTo, sessionTree, setEntryLabel, TREE_PANEL, type TreeFilterMode } from "../features/tree.ts";
+import { bindingText, panelKeys, type PieBoyKeys } from "../keybindings.ts";
 import { framed, type SizedView } from "../screen/frame.ts";
 import { Lines } from "../screen/lines.ts";
 import { type PieBoyState, sanitize } from "../state/core.ts";
@@ -97,11 +97,13 @@ const FILTER_KEYS: ReadonlyArray<readonly [AppKeybinding, TreeFilterMode | "next
   ["app.tree.filter.all", "all", "EVERYTHING (again: ALL TALK)"],
 ];
 /** What ? lists: the keys TREE adds to those the editor's border shows, as the user has them bound. */
-const KEYS: ReadonlyArray<readonly [() => string, string]> = [
+const treeKeys = (keys: PieBoyKeys): ReadonlyArray<readonly [() => string, string]> => [
   ...VIEWPORT_KEYS.map(({ keys, what }) => [() => keyPair(...keys), what] as const),
-  [() => "home/end", "first / last row"],
-  [() => "[ ]", "previous / next fork"],
-  [() => ".", "back to HERE"],
+  [() => bindingText(keys, "pieBoy.panel.start"), "first row"],
+  [() => bindingText(keys, "pieBoy.panel.end"), "last row"],
+  [() => bindingText(keys, "pieBoy.tree.previousBranch"), "previous fork"],
+  [() => bindingText(keys, "pieBoy.tree.nextBranch"), "next fork"],
+  [() => bindingText(keys, "pieBoy.tree.here"), "back to HERE"],
   ...FILTER_KEYS.map(([id, , what]) => [() => keyText(id), what] as const),
   [() => keyText("app.tree.editLabel"), "set or remove the label"],
   [() => keyText("app.message.copy"), "copy the text"],
@@ -234,7 +236,7 @@ class TreeView implements Component, ListControl {
     const height = this.sized && this.sized.viewportHeight > 0 ? this.sized.viewportHeight : FALLBACK_HEIGHT;
     if (this.sized) this.sized.drawnFor = this.sized.viewportHeight;
     const t = this.env.theme();
-    const keys = this.help ? keyLines(t, width) : [];
+    const keys = this.help ? keyLines(t, width, panelKeys(this.env)) : [];
     // The keys and the rule above them take what the rows leave, at least one row.
     const shown = keys.slice(0, Math.max(0, height - CHROME_LINES - 2));
     const listRows = Math.max(1, height - CHROME_LINES - (shown.length ? shown.length + 1 : 0));
@@ -400,7 +402,16 @@ class TreeView implements Component, ListControl {
     const position = this.rows.length > 0 ? `${this.selected + 1}/${this.rows.length}` : "0/0";
     const head = `${t.fg("borderMuted", "──")} ${t.fg("accent", position)} ${t.fg("borderMuted", "·")} ${t.fg("accent", t.bold(name))} `;
     // The hints that do not fit go first from the left: the filter key and ? stay longest.
-    const hints = this.help ? ["? back"] : ["[ ] fork", ". here", `${keyText("app.tree.filter.cycleForward")} filter`, "? keys"];
+    const keysFor = panelKeys(this.env);
+    const help = bindingText(keysFor, "pieBoy.tree.help");
+    const previous = bindingText(keysFor, "pieBoy.tree.previousBranch");
+    const next = bindingText(keysFor, "pieBoy.tree.nextBranch");
+    const here = bindingText(keysFor, "pieBoy.tree.here");
+    const filter = keyText("app.tree.filter.cycleForward");
+    const hints = this.help ? [help && `${help} back`].filter(Boolean) : [
+      previous && `${previous} previous fork`, next && `${next} next fork`, here && `${here} here`,
+      filter && `${filter} filter`, help && `${help} keys`,
+    ].filter(Boolean);
     let keys = "";
     while (hints.length) {
       keys = t.fg("dim", ` ${hints.join(" · ")} `);
@@ -484,17 +495,17 @@ class TreeView implements Component, ListControl {
    */
   key(data: string): boolean {
     if (this.label) {
-      // Esc (also what alt+o sends first) and Tab close the field; Enter saves.
-      if (matchesKey(data, "escape") || matchesKey(data, "tab")) this.closeLabel();
+      // The configured cancel action closes the field; focus handoff calls cancel().
+      if (panelKeys(this.env).matches(data, "pieBoy.field.cancel")) this.closeLabel();
       else this.label.handleInput(data);
       return true;
     }
-    if (matchesKey(data, "?")) {
+    if (panelKeys(this.env).matches(data, "pieBoy.tree.help")) {
       this.help = !this.help;
       return true;
     }
-    if (matchesKey(data, "[") || matchesKey(data, "]")) {
-      const step = matchesKey(data, "]") ? 1 : -1;
+    if (panelKeys(this.env).matches(data, "pieBoy.tree.previousBranch") || panelKeys(this.env).matches(data, "pieBoy.tree.nextBranch")) {
+      const step = panelKeys(this.env).matches(data, "pieBoy.tree.nextBranch") ? 1 : -1;
       for (let index = this.selected + step; index >= 0 && index < this.rows.length; index += step) {
         if (this.rows[index]!.branches > 1) {
           this.select(index);
@@ -503,7 +514,7 @@ class TreeView implements Component, ListControl {
       }
       return true;
     }
-    if (matchesKey(data, ".")) {
+    if (panelKeys(this.env).matches(data, "pieBoy.tree.here")) {
       this.select(this.hereRow);
       return true;
     }
@@ -536,8 +547,11 @@ class TreeView implements Component, ListControl {
       this.closeLabel();
       setEntryLabel(this.env.state, entryId, value);
     };
-    input.onEscape = () => this.closeLabel();
     this.label = input;
+  }
+
+  cancel(): void {
+    this.closeLabel();
   }
 
   private closeLabel(): void {
@@ -666,8 +680,9 @@ function copyText(entry: Entry): string | undefined {
  * What ? shows under the rows: TREE's keys as the user has them bound (unbound ones
  * left out), in as many columns as the width takes, row by row.
  */
-function keyLines(t: Theme, width: number): string[] {
-  const keys = KEYS.map(([key, what]) => [key(), what] as const).filter(([key]) => key);
+function keyLines(t: Theme, width: number, bindings: PieBoyKeys): string[] {
+  const keys = treeKeys(bindings).map(([key, what]) => [key(), what] as const).filter(([key]) => key);
+  if (!keys.length) return [];
   const keyWidth = Math.max(...keys.map(([key]) => visibleWidth(key))) + 2;
   const cell = keyWidth + Math.max(...keys.map(([, what]) => visibleWidth(what)));
   const gap = 3;

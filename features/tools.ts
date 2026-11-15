@@ -33,46 +33,49 @@ export function toolData(state: PieBoyState): Readonly<ToolData> {
   return collected.get(state) ?? NONE;
 }
 
-export function setupTools(pi: ExtensionAPI, env: FeatureEnv): void {
+export function setupTools(pi: ExtensionAPI, env: FeatureEnv, thinking = true): void {
   const data = createToolData();
   collected.set(env.state, data);
   /** The content block of the thinking being streamed, to separate blocks with a blank line. */
   let thinkingBlock = -1;
 
   pi.on("session_start", (_event, ctx) => {
-    rebuildFromBranch(data, ctx.sessionManager);
+    rebuildFromBranch(data, ctx.sessionManager, thinking);
   });
 
   pi.on("session_tree", (_event, ctx) => {
-    rebuildFromBranch(data, ctx.sessionManager);
+    rebuildFromBranch(data, ctx.sessionManager, thinking);
     env.requestRender();
   });
 
-  pi.on("message_start", (event) => {
-    if ((event.message as { role?: string }).role !== "assistant") return;
-    data.thinking = "";
-    data.thinkingTrimmed = false;
-    data.toolsVersion++;
-    thinkingBlock = -1;
-  });
+  if (thinking) {
+    pi.on("message_start", (event) => {
+      if ((event.message as { role?: string }).role !== "assistant") return;
+      data.thinking = "";
+      data.thinkingTrimmed = false;
+      data.toolsVersion++;
+      thinkingBlock = -1;
+    });
 
-  // Streamed thinking arrives as deltas; append them instead of re-reading the
-  // whole message on every update.
-  pi.on("message_update", (event) => {
-    const update = event.assistantMessageEvent;
-    if (update.type !== "thinking_delta") return;
-    if (thinkingBlock !== -1 && update.contentIndex !== thinkingBlock) appendThinking(data, "\n\n");
-    thinkingBlock = update.contentIndex;
-    appendThinking(data, update.delta);
-  });
+    // Streamed thinking arrives as deltas; append them instead of re-reading the
+    // whole message on every update.
+    pi.on("message_update", (event) => {
+      const update = event.assistantMessageEvent;
+      if (update.type !== "thinking_delta") return;
+      if (thinkingBlock !== -1 && update.contentIndex !== thinkingBlock) appendThinking(data, "\n\n");
+      thinkingBlock = update.contentIndex;
+      appendThinking(data, update.delta);
+    });
 
-  pi.on("message_end", (event) => {
-    const thinking = thinkingTail(event.message);
-    if (!thinking.text) return;
-    data.thinking = thinking.text;
-    data.thinkingTrimmed = thinking.trimmed;
-    data.toolsVersion++;
-  });
+    pi.on("message_end", (event) => {
+      const thinking = thinkingTail(event.message);
+      if (!thinking.text) return;
+      data.thinking = thinking.text;
+      data.thinkingTrimmed = thinking.trimmed;
+      data.toolsVersion++;
+    });
+
+  }
 
   pi.on("agent_end", () => {
     if (data.active.size) {

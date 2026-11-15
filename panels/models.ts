@@ -3,8 +3,9 @@
  * pick a model, Enter or a click switches the session to it, and `s` shows the
  * scoped models instead of all, or all instead of the scoped ones.
  */
-import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { type ModelItem, modelFilter, models, pickModel, shownModels, switchModel, toggleModelFilter } from "../features/models.ts";
+import { bindingText, panelKeys } from "../keybindings.ts";
 import { framed } from "../screen/frame.ts";
 import { Lines } from "../screen/lines.ts";
 import { compactNumber, ListLines, Selection, withCursor } from "./common.ts";
@@ -27,7 +28,7 @@ class ModelSelection extends Selection {
   }
 
   key(data: string): boolean {
-    if (!matchesKey(data, "s")) return false;
+    if (!panelKeys(this.env).matches(data, "pieBoy.models.toggleScope")) return false;
     toggleModelFilter(this.env.state);
     return true;
   }
@@ -40,7 +41,8 @@ registerPanel("modellist", (env) => {
     () => {
       const data = models(env.state);
       const scoped = modelFilter(data) === "scoped";
-      return `MODELS  ${scoped ? "SCOPED" : "ALL"} ${shownModels(data).length}  ·  s: ${scoped ? "all" : "scoped"}`;
+      const key = bindingText(panelKeys(env), "pieBoy.models.toggleScope");
+      return `MODELS  ${scoped ? "SCOPED" : "ALL"} ${shownModels(data).length}${key ? `  ·  ${key}: ${scoped ? "all" : "scoped"}` : ""}`;
     },
     new ListLines(
       selection,
@@ -106,12 +108,13 @@ function modelDetail(env: PanelEnv, width: number): string[] {
   const t = env.theme();
   const data = models(env.state);
   const item = detailItem(env);
-  if (!item) return [t.fg("dim", " -- pick a model: the arrow keys or a click --")];
+  if (!item) return [t.fg("dim", " -- pick a model from the list, or click one --")];
   const inUse = item.key === data.current;
   const field = (label: string, value: string) => ` ${t.fg("muted", label.padEnd(9))}${t.fg("text", value)}`;
+  const activate = bindingText(panelKeys(env), "pieBoy.panel.activate");
   const lines = [
     ` ${t.fg("accent", t.bold(item.name))}`,
-    ` ${t.fg("muted", item.key)}${inUse ? t.fg("success", "  ·  in use") : t.fg("dim", "  ·  Enter to switch")}`,
+    ` ${t.fg("muted", item.key)}${inUse ? t.fg("success", "  ·  in use") : t.fg("dim", `  ·  ${activate ? `${activate} or click` : "click"} to switch`)}`,
   ];
   if (data.failure?.key === item.key) {
     lines.push(...wrapTextWithAnsi(data.failure.text, Math.max(1, width - 1)).map((line) => ` ${t.fg("error", line)}`));

@@ -3,6 +3,8 @@
 From the repository root:
 
 ```sh
+export PI_SCRATCHPAD="${PI_SCRATCHPAD:-$(mktemp -d)}"
+mkdir -p "$PI_SCRATCHPAD"
 node tests/run.mjs
 ```
 
@@ -38,6 +40,16 @@ Pi can recompute hidden declarations in private per-turn option copies; those
 unexposed changes, like later context handlers, remain outside this hook's
 observation. No provider-specific payload parsing or private session access is used.
 
+
+## Configuration and QUEST checks
+
+`config.mjs` covers defaults, validation, key overrides and hints;
+`status-art.mjs` checks art modes, rendering and animation scheduling.
+`quests.mjs` exercises the TODO template, parsing, completion, stale and duplicate
+rejection, watching, confirmation and model instructions. `config-startup.mjs`
+checks configuration-dependent startup and optional imports; `input.mjs` covers
+input routing and bindings. These use a fake Pi harness where applicable, not a
+live terminal or provider; they do not verify live terminal or provider behavior.
 
 ## Behavioral and representation checks
 
@@ -156,3 +168,11 @@ In narrow context panels each part label precedes its numeric row rather than
 becoming an unidentifiable ellipsis. INV method rows remain single-row.
 Frontmatter removal requires standalone opening and closing marker lines; invalid
 or incomplete framing keeps the original preview, as do YAML parse exceptions.
+
+`quest-store.mjs` runs fault injection in an isolated subprocess and adds
+initialization-failure, concurrent in-process editing,
+symlink preservation, ambiguity and snapshot identity regression checks.
+`panel-keys.mjs` checks remapped/disabled RADIO, model and TREE keys and displayed
+hints. Set `PI_SCRATCHPAD` to an existing writable directory as above; new test
+fixtures stay there. Prompt tests check text and injection conditions, not whether
+an actual model records or deletes tasks as instructed.

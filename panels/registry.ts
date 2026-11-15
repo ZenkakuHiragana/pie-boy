@@ -1,8 +1,10 @@
 /**
  * Panel registration. Each file in this folder registers its panels with
- * registerPanel; panels/index.ts imports them all. A panel id in layout.ts names
+ * registerPanel; panels/index.ts loads the configured groups. A panel id in layout.ts names
  * one of them.
  */
+import type { PieBoyKeys } from "../keybindings.ts";
+import type { StatusArt } from "./status-art.ts";
 import type { Keybinding, TUI } from "@earendil-works/pi-tui";
 import type { ToolRenderers } from "@earendil-works/pi-coding-agent";
 import type { Framed } from "../screen/frame.ts";
@@ -10,6 +12,9 @@ import type { ThemeRef } from "../screen/lines.ts";
 import type { PieBoyState } from "../state/core.ts";
 
 export interface PanelEnv {
+  /** Optional services chosen once at startup; type imports do not load their implementation. */
+  statusArt?: StatusArt;
+  keys?: PieBoyKeys;
   theme: ThemeRef;
   state: PieBoyState;
   now: () => number;
@@ -58,11 +63,13 @@ export interface ListControl {
   key?(data: string): boolean;
   /**
    * Whether a text field of the panel is being typed into. Its keys go to `key`
-   * except ctrl+c, which goes to Pi, and alt+o, for which `key` gets Esc (the field
-   * closes) before the editor takes the keys. The field draws the terminal cursor
-   * instead of the editor.
+   * except ctrl+c, which goes to Pi. The configured focus-toggle action calls
+   * `cancel()` before the editor takes the keys, independently of cancel bindings.
+   * The field draws the terminal cursor instead of the editor.
    */
   typing?(): boolean;
+  /** Close the panel's text field, independently of its configured cancel keys. */
+  cancel?(): void;
 }
 
 export interface PanelHandle extends Framed {
