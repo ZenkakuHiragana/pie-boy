@@ -288,7 +288,7 @@ function searchLines(env: PanelEnv, selection: Selection, input: Input, typing: 
   const data = radioData(env.state);
   const search = data.search;
   const lines: string[] = [];
-  if (typing) {
+  if (typing && env.focused("radiosearch")) {
     const inner = Math.max(1, width - 4);
     const [field = ""] = input.render(inner);
     selection.place(0, 0, 4);
@@ -301,7 +301,8 @@ function searchLines(env: PanelEnv, selection: Selection, input: Input, typing: 
     if (hints) lines.push(truncateToWidth(`   ${t.fg("dim", hints)}`, width));
   } else {
     selection.place(0, 0, 1);
-    const text = search.query ? t.fg("text", search.query) : t.fg("dim", "search YouTube");
+    const value = typing ? input.getValue() : search.query;
+    const text = value ? t.fg("text", value) : t.fg("dim", "search YouTube");
     lines.push(truncateToWidth(` ${t.fg("accent", "›")} ${text}`, width));
   }
   saveErrorLines(env, width, lines);

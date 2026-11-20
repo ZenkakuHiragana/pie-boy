@@ -79,8 +79,8 @@ export interface Guide {
 /** What the layout needs from the screen it is shown on. */
 export interface ScreenHost {
   size(): TerminalSize;
-  /** Show where a dragged boundary would go, or hide it (undefined). */
-  preview(guide: Guide | undefined): void;
+  /** Show or hide the guide. A new drag also gives the host a way to cancel it. */
+  preview(guide: Guide | undefined, cancel?: () => void): void;
 }
 
 /**
@@ -184,7 +184,10 @@ class Split {
             ? { axis: "row", x: event.screenX, y: event.screenY - event.y, length: event.height }
             : { axis: "column", x: event.screenX - event.x, y: event.screenY, length: event.width };
         drag = { part, sign: part === boundary ? 1 : -1, from: at, start, size: start, guide };
-        this.host.preview(guide);
+        this.host.preview(guide, () => {
+          drag = undefined;
+          this.host.preview(undefined);
+        });
         return { capture: true };
       }
       if (!drag) return undefined;

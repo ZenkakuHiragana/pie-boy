@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const install = join(homedir(), '.pi', 'agent', 'install');
 // Override for a non-managed Pi install. Use the same Pi packages as the host.
 const modules = process.env.PI_TEST_MODULES || join(install, 'releases', readFileSync(join(install, 'current-version'), 'utf8').trim(), 'node_modules');
+export const loadPi = (path) => import(pathToFileURL(join(modules, '@earendil-works', path)).href);
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const localDependencies = join(root,'node_modules');
 const dependencies = process.env.PIE_BOY_TEST_MODULES || (existsSync(join(localDependencies,'gpt-tokenizer/package.json')) ? localDependencies : join(homedir(),'.pi/agent/extensions/pie-boy/node_modules'));

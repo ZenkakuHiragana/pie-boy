@@ -19,6 +19,8 @@ export interface TabBarOptions {
   blinking: (index: number) => boolean;
   /** Text at the right end of the row; it never moves the labels and is cut to fit. */
   right?: () => string;
+  /** A notice that takes precedence over labels and the usual right-hand text. */
+  notice?: () => string | undefined;
   onSelect: (index: number) => void;
   /** Inner tabs: no edge marks, and a rule between the labels instead of a bar after each. */
   inner?: boolean;
@@ -44,7 +46,9 @@ export class TabBar implements Component {
     this.lastWidth = width;
     const t = this.options.theme();
     const { labels, x, hits } = this.arrange();
-    const start = this.startAt(width, x, hits);
+    const notice = this.options.notice?.();
+    const labelWidth = this.labelWidth(width, notice);
+    const start = this.startAt(width, x, hits, labelWidth);
     const rule = (n: number) => (n > 0 ? t.fg("borderMuted", "─".repeat(n)) : "");
     const lead = rule(start);
     // Labels pushed past the left edge lose their start; the rest is cut to the width below.
@@ -54,6 +58,12 @@ export class TabBar implements Component {
     this.hits = hits
       .map((hit) => ({ ...hit, from: Math.max(0, hit.from + offset), to: Math.min(width, hit.to + offset) }))
       .filter((hit) => hit.from < hit.to);
+    if (notice) {
+      const left = sliceByColumn(shown, 0, labelWidth);
+      const right = truncateToWidth(notice, width);
+      const gap = width - visibleWidth(left) - visibleWidth(right);
+      return [left + (gap > 0 ? rule(gap - 1) + " " : "") + right];
+    }
     const remaining = width - offset - x;
     const right = this.options.right?.() ?? "";
     let tail = rule(remaining);
@@ -68,7 +78,7 @@ export class TabBar implements Component {
   activeMiddle(width: number): number | undefined {
     const { x, hits } = this.arrange();
     const active = hits[this.options.active()];
-    return active && this.startAt(width, x, hits) + Math.floor((active.from + active.to) / 2);
+    return active && this.startAt(width, x, hits, this.labelWidth(width, this.options.notice?.())) + Math.floor((active.from + active.to) / 2);
   }
 
   /** The labels in one line, its width, and where each label sits in it. */
@@ -101,12 +111,19 @@ export class TabBar implements Component {
     return { labels, x, hits };
   }
 
-  /** Column where the labels start: under the anchor, or centred (never left of the edge then). */
-  private startAt(width: number, x: number, hits: ReadonlyArray<{ from: number; to: number }>): number {
+  private labelWidth(width: number, notice: string | undefined): number {
+    return notice ? Math.max(0, width - visibleWidth(notice) - 2) : width;
+  }
+
+  /** Where the labels start: under the anchor, or as centred as the notice allows. */
+  private startAt(width: number, x: number, hits: ReadonlyArray<{ from: number; to: number }>, labelWidth: number): number {
     const active = hits[this.options.active()];
     const anchor = this.options.anchor?.(width);
     if (anchor !== undefined && active) return anchor - Math.floor((active.from + active.to) / 2);
-    return Math.max(0, Math.floor((width - x) / 2));
+    // When the notice needs part of a row already filled by tabs, keep the
+    // selected label visible before the labels that cannot be clicked anyway.
+    if (labelWidth < width && active && active.to > labelWidth) return labelWidth - active.to;
+    return Math.max(0, Math.min(Math.floor((width - x) / 2), labelWidth - x));
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {

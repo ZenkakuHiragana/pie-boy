@@ -25,4 +25,5 @@ await (await import('./quest-store.mjs')).default();
 await (await import('./panel-keys.mjs')).default();
 await (await import('./config-startup.mjs')).default();
 await (await import('./input.mjs')).default();
+await (await import('./tab-area.mjs')).default();
 console.log('configuration, optional imports, input and QUEST assertions passed');

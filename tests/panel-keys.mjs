@@ -74,7 +74,9 @@ export default async function panelKeys() {
   const native = new tui.KeybindingsManager({ ...tui.TUI_KEYBINDINGS, 'app.tree.editLabel': { defaultKeys: 'l' } }, { 'tui.input.submit': 'ctrl+y' });
   tui.setKeybindings(native);
   try {
-    const search = make('radiosearch', custom);
+    const search = PANELS.get('radiosearch')({
+      ...base, keys: custom, focused: (id) => id === 'radiosearch',
+    });
     assert.doesNotMatch(search.title(), /add playlist/);
     search.list.activate();
     assert.equal(search.list.typing(), true);

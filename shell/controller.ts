@@ -7,7 +7,7 @@
  * (chat-viewport.js in pi-coding-agent). The shell keeps the dock as is, so the
  * editor and Pi's footer stay on every tab, and swaps what sits above it:
  *
- *   VStack([tab bar, inner tab bar, body of the shown page, dock])
+ *   VStack([tab area (tab bar, inner tab bar, page), dock])
  *
  * The transcript ScrollView is one of the panels a page can place, so Pi keeps
  * drawing the conversation itself (Mermaid, images, other extensions' views).
@@ -61,6 +61,7 @@ import { PANELS, type PanelEnv, type PanelHandle } from "../panels/registry.ts";
 import { framed } from "../screen/frame.ts";
 import { buildArrangement, type BuiltArrangement, type Guide, type PageDef, type ScreenHost, type TabDef } from "../screen/layout.ts";
 import { noSignal } from "../screen/nosignal.ts";
+import { tabArea } from "../screen/tab-area.ts";
 import { TabBar } from "../screen/tabbar.ts";
 import { type PieBoyState, createState, type Versioned } from "../state/core.ts";
 import { pieBoyEditor } from "./editor.ts";
@@ -212,6 +213,7 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
   const shownListeners: Array<() => void> = [];
   /** Pi's overlay showing where a dragged boundary would go. */
   let guideOverlay: OverlayHandle | undefined;
+  let cancelDividerDrag: (() => void) | undefined;
   /**
    * The layout's view of the screen: the terminal size that the shares in layout.ts
    * are taken of, and a guide line drawn as a non-capturing overlay while a
@@ -219,7 +221,8 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
    */
   const screenHost: ScreenHost = {
     size: () => ({ width: tui?.terminal.columns ?? 0, height: tui?.terminal.rows ?? 0 }),
-    preview: (guide: Guide | undefined) => {
+    preview: (guide: Guide | undefined, cancel?: () => void) => {
+      if (cancel || !guide) cancelDividerDrag = cancel;
       guideOverlay?.hide();
       guideOverlay = undefined;
       if (!guide || !tui) return;
@@ -314,7 +317,7 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
     theme,
     state,
     now, every, redrawAt,
-    focused: (id) => panelMode() && focusedId() === id,
+    focused: (id) => editorFocused() && panelMode() && focusedId() === id,
     focusPanel: (id) => {
       focus.set(currentKey(), id);
       panelChoice = true;
@@ -384,6 +387,8 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
   const editorFocused = () =>
     editor !== undefined && (tui instanceof TuiAltScreen || tui instanceof TuiMainScreen) && tui.getFocusedComponent() === editor;
 
+  const tabComponent = tabArea(editorFocused, () => cancelDividerDrag?.());
+
   /** The page's `primary` panel present now, else the transcript, else the first scrollable panel. */
   const primaryPanel = (): string | undefined => {
     const ids = visiblePanels();
@@ -422,6 +427,7 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
     active: () => activeTab,
     blinking: (index) => blinkOn() && pages[index]!.some((_page, p) => showsTranscript(index, p)),
     right: clock,
+    notice: () => editorFocused() ? undefined : theme().fg("warning", "Close Pi dialog"),
     onSelect: (index) => selectTab(index),
   });
 
@@ -444,9 +450,11 @@ export function createShell(pi: ExtensionAPI, tabs: readonly TabDef[] = defaultT
       const body = max ? handleFor(max).component : arrangementFor(key, currentPage()!).component;
       root = new VStack([
         { component: imageGuard, basis: 0, grow: 0, shrink: 0, minSize: 0 },
-        { component: tabBar, basis: 1, grow: 0, shrink: 0, minSize: 1 },
-        { component: pageBar, basis: 1, grow: 0, shrink: 0, minSize: 1 },
-        { component: body, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+        { component: tabComponent(new VStack([
+          { component: tabBar, basis: 1, grow: 0, shrink: 0, minSize: 1 },
+          { component: pageBar, basis: 1, grow: 0, shrink: 0, minSize: 1 },
+          { component: body, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+        ])), basis: 0, grow: 1, shrink: 1, minSize: 3 },
         { component: dock!, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
       ]);
       (root as RootWithBase)[BASE] = baseRoot;
